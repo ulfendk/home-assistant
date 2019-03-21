@@ -1,16 +1,16 @@
 """Support for the NetAtmo Weather Service."""
 import logging
-from time import time
 import threading
+from time import time
 
 import voluptuous as vol
 
+import homeassistant.helpers.config_validation as cv
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
     TEMP_CELSIUS, DEVICE_CLASS_HUMIDITY, DEVICE_CLASS_TEMPERATURE,
     DEVICE_CLASS_BATTERY)
 from homeassistant.helpers.entity import Entity
-import homeassistant.helpers.config_validation as cv
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,31 +23,31 @@ DEPENDENCIES = ['netatmo']
 NETATMO_UPDATE_INTERVAL = 600
 
 SENSOR_TYPES = {
-    'temperature': ['Temperature', TEMP_CELSIUS, None,
-                    DEVICE_CLASS_TEMPERATURE],
-    'co2': ['CO2', 'ppm', 'mdi:cloud', None],
-    'pressure': ['Pressure', 'mbar', 'mdi:gauge', None],
-    'noise': ['Noise', 'dB', 'mdi:volume-high', None],
-    'humidity': ['Humidity', '%', None, DEVICE_CLASS_HUMIDITY],
-    'rain': ['Rain', 'mm', 'mdi:weather-rainy', None],
-    'sum_rain_1': ['sum_rain_1', 'mm', 'mdi:weather-rainy', None],
-    'sum_rain_24': ['sum_rain_24', 'mm', 'mdi:weather-rainy', None],
-    'battery_vp': ['Battery', '', 'mdi:battery', None],
     'battery_lvl': ['Battery_lvl', '', 'mdi:battery', None],
     'battery_percent': ['battery_percent', '%', None, DEVICE_CLASS_BATTERY],
-    'min_temp': ['Min Temp.', TEMP_CELSIUS, 'mdi:thermometer', None],
-    'max_temp': ['Max Temp.', TEMP_CELSIUS, 'mdi:thermometer', None],
-    'windangle': ['Angle', '', 'mdi:compass', None],
-    'windangle_value': ['Angle Value', 'º', 'mdi:compass', None],
-    'windstrength': ['Strength', 'km/h', 'mdi:weather-windy', None],
+    'battery_vp': ['Battery', '', 'mdi:battery', None],
+    'co2': ['CO2', 'ppm', 'mdi:cloud', None],
     'gustangle': ['Gust Angle', '', 'mdi:compass', None],
     'gustangle_value': ['Gust Angle Value', 'º', 'mdi:compass', None],
     'guststrength': ['Gust Strength', 'km/h', 'mdi:weather-windy', None],
+    'health_idx': ['Health', '', 'mdi:cloud', None],
+    'humidity': ['Humidity', '%', None, DEVICE_CLASS_HUMIDITY],
+    'max_temp': ['Max Temp.', TEMP_CELSIUS, 'mdi:thermometer', None],
+    'min_temp': ['Min Temp.', TEMP_CELSIUS, 'mdi:thermometer', None],
+    'noise': ['Noise', 'dB', 'mdi:volume-high', None],
+    'pressure': ['Pressure', 'mbar', 'mdi:gauge', None],
+    'rain': ['Rain', 'mm', 'mdi:weather-rainy', None],
     'rf_status': ['Radio', '', 'mdi:signal', None],
     'rf_status_lvl': ['Radio_lvl', '', 'mdi:signal', None],
+    'sum_rain_1': ['sum_rain_1', 'mm', 'mdi:weather-rainy', None],
+    'sum_rain_24': ['sum_rain_24', 'mm', 'mdi:weather-rainy', None],
+    'temperature': ['Temperature', TEMP_CELSIUS,
+                    None, DEVICE_CLASS_TEMPERATURE],
     'wifi_status': ['Wifi', '', 'mdi:wifi', None],
     'wifi_status_lvl': ['Wifi_lvl', 'dBm', 'mdi:wifi', None],
-    'health_idx': ['Health', '', 'mdi:cloud', None],
+    'windangle': ['Angle', '', 'mdi:compass', None],
+    'windangle_value': ['Angle Value', 'º', 'mdi:compass', None],
+    'windstrength': ['Strength', 'km/h', 'mdi:weather-windy', None],
 }
 
 MODULE_SCHEMA = vol.Schema({
@@ -86,6 +86,7 @@ def manual_config(netatmo, config, dev):
     all_classes = all_product_classes()
     not_handled = {}
     for data_class in all_classes:
+
         data = NetAtmoData(netatmo.NETATMO_AUTH, data_class,
                            config.get(CONF_STATION))
         try:
@@ -141,8 +142,14 @@ class NetAtmoSensor(Entity):
 
     def __init__(self, netatmo_data, module_name, sensor_type):
         """Initialize the sensor."""
-        self._name = 'Netatmo {} {}'.format(module_name,
-                                            SENSOR_TYPES[sensor_type][0])
+        import pyatmo
+        if netatmo_data.data_class is pyatmo.HomeCoachData:
+            station_name = netatmo_data.station_data.stationByName() \
+                .get('station_name', module_name)
+        else:
+            station_name = module_name
+        self._name = '{} {}'.format(station_name,
+                                    SENSOR_TYPES[sensor_type][0])
         self.netatmo_data = netatmo_data
         self.module_name = module_name
         self.type = sensor_type
