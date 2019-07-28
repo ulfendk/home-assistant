@@ -1,9 +1,12 @@
 """Constants for the homekit_controller component."""
 DOMAIN = 'homekit_controller'
 
-KNOWN_ACCESSORIES = "{}-accessories".format(DOMAIN)
 KNOWN_DEVICES = "{}-devices".format(DOMAIN)
 CONTROLLER = "{}-controller".format(DOMAIN)
+ENTITY_MAP = '{}-entity-map'.format(DOMAIN)
+
+HOMEKIT_DIR = '.homekit'
+PAIRING_FILE = 'pairing.json'
 
 # Mapping from Homekit type to component.
 HOMEKIT_ACCESSORY_DISPATCH = {
@@ -16,6 +19,7 @@ HOMEKIT_ACCESSORY_DISPATCH = {
     'window': 'cover',
     'window-covering': 'cover',
     'lock-mechanism': 'lock',
+    'contact': 'binary_sensor',
     'motion': 'binary_sensor',
     'humidity': 'sensor',
     'light': 'sensor',

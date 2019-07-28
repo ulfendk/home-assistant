@@ -4,17 +4,19 @@ from homeassistant.components.light import (
 
 from . import DOMAIN as ELK_DOMAIN, ElkEntity, create_elk_entities
 
-DEPENDENCIES = [ELK_DOMAIN]
-
 
 async def async_setup_platform(
         hass, config, async_add_entities, discovery_info=None):
     """Set up the Elk light platform."""
     if discovery_info is None:
         return
-    elk = hass.data[ELK_DOMAIN]['elk']
-    async_add_entities(
-        create_elk_entities(hass, elk.lights, 'plc', ElkLight, []), True)
+    elk_datas = hass.data[ELK_DOMAIN]
+    entities = []
+    for elk_data in elk_datas.values():
+        elk = elk_data['elk']
+        create_elk_entities(elk_data, elk.lights,
+                            'plc', ElkLight, entities)
+    async_add_entities(entities, True)
 
 
 class ElkLight(ElkEntity, Light):

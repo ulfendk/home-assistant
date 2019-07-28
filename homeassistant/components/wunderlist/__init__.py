@@ -7,8 +7,6 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.const import (
     CONF_NAME, CONF_ACCESS_TOKEN)
 
-REQUIREMENTS = ['wunderpy2==0.1.6']
-
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = 'wunderlist'
@@ -30,7 +28,7 @@ SERVICE_CREATE_TASK = 'create_task'
 SERVICE_SCHEMA_CREATE_TASK = vol.Schema({
     vol.Required(CONF_LIST_NAME): cv.string,
     vol.Required(CONF_NAME): cv.string,
-    vol.Optional(CONF_STARRED): cv.boolean,
+    vol.Optional(CONF_STARRED, default=False): cv.boolean,
 })
 
 
@@ -44,7 +42,10 @@ def setup(hass, config):
         _LOGGER.error("Invalid credentials")
         return False
 
-    hass.services.register(DOMAIN, 'create_task', data.create_task)
+    hass.services.register(
+        DOMAIN, 'create_task', data.create_task,
+        schema=SERVICE_SCHEMA_CREATE_TASK
+    )
     return True
 
 
@@ -70,9 +71,9 @@ class Wunderlist:
 
     def create_task(self, call):
         """Create a new task on a list of Wunderlist."""
-        list_name = call.data.get(CONF_LIST_NAME)
-        task_title = call.data.get(CONF_NAME)
-        starred = call.data.get(CONF_STARRED)
+        list_name = call.data[CONF_LIST_NAME]
+        task_title = call.data[CONF_NAME]
+        starred = call.data[CONF_STARRED]
         list_id = self._list_by_name(list_name)
         self._client.create_task(list_id, task_title, starred=starred)
         return True

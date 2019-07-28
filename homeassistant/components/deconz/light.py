@@ -9,47 +9,48 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 import homeassistant.util.color as color_util
 
 from .const import (
-    CONF_ALLOW_DECONZ_GROUPS, DOMAIN as DECONZ_DOMAIN, COVER_TYPES, NEW_GROUP,
-    NEW_LIGHT, SWITCH_TYPES)
+    COVER_TYPES, DOMAIN as DECONZ_DOMAIN, NEW_GROUP, NEW_LIGHT, SWITCH_TYPES)
 from .deconz_device import DeconzDevice
-
-DEPENDENCIES = ['deconz']
+from .gateway import get_gateway_from_config_entry
 
 
 async def async_setup_platform(
         hass, config, async_add_entities, discovery_info=None):
-    """Old way of setting up deCONZ lights and group."""
+    """Old way of setting up deCONZ platforms."""
     pass
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the deCONZ lights and groups from a config entry."""
-    gateway = hass.data[DECONZ_DOMAIN]
+    gateway = get_gateway_from_config_entry(hass, config_entry)
 
     @callback
     def async_add_light(lights):
         """Add light from deCONZ."""
         entities = []
+
         for light in lights:
             if light.type not in COVER_TYPES + SWITCH_TYPES:
                 entities.append(DeconzLight(light, gateway))
+
         async_add_entities(entities, True)
 
-    gateway.listeners.append(
-        async_dispatcher_connect(hass, NEW_LIGHT, async_add_light))
+    gateway.listeners.append(async_dispatcher_connect(
+        hass, gateway.async_event_new_device(NEW_LIGHT), async_add_light))
 
     @callback
     def async_add_group(groups):
         """Add group from deCONZ."""
         entities = []
-        allow_group = config_entry.data.get(CONF_ALLOW_DECONZ_GROUPS, True)
+
         for group in groups:
-            if group.lights and allow_group:
-                entities.append(DeconzLight(group, gateway))
+            if group.lights and gateway.allow_deconz_groups:
+                entities.append(DeconzGroup(group, gateway))
+
         async_add_entities(entities, True)
 
-    gateway.listeners.append(
-        async_dispatcher_connect(hass, NEW_GROUP, async_add_group))
+    gateway.listeners.append(async_dispatcher_connect(
+        hass, gateway.async_event_new_device(NEW_GROUP), async_add_group))
 
     async_add_light(gateway.api.lights.values())
     async_add_group(gateway.api.groups.values())
@@ -59,7 +60,7 @@ class DeconzLight(DeconzDevice, Light):
     """Representation of a deCONZ light."""
 
     def __init__(self, device, gateway):
-        """Set up light and add update callback to get data from websocket."""
+        """Set up light."""
         super().__init__(device, gateway)
 
         self._features = SUPPORT_BRIGHTNESS
@@ -165,6 +166,38 @@ class DeconzLight(DeconzDevice, Light):
         """Return the device state attributes."""
         attributes = {}
         attributes['is_deconz_group'] = self._device.type == 'LightGroup'
+
         if self._device.type == 'LightGroup':
             attributes['all_on'] = self._device.all_on
+
         return attributes
+
+
+class DeconzGroup(DeconzLight):
+    """Representation of a deCONZ group."""
+
+    def __init__(self, device, gateway):
+        """Set up group and create an unique id."""
+        super().__init__(device, gateway)
+
+        self._unique_id = '{}-{}'.format(
+            self.gateway.api.config.bridgeid,
+            self._device.deconz_id)
+
+    @property
+    def unique_id(self):
+        """Return a unique identifier for this device."""
+        return self._unique_id
+
+    @property
+    def device_info(self):
+        """Return a device description for device registry."""
+        bridgeid = self.gateway.api.config.bridgeid
+
+        return {
+            'identifiers': {(DECONZ_DOMAIN, self.unique_id)},
+            'manufacturer': 'Dresden Elektronik',
+            'model': 'deCONZ group',
+            'name': self._device.name,
+            'via_device': (DECONZ_DOMAIN, bridgeid),
+        }

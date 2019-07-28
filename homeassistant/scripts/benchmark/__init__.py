@@ -5,17 +5,22 @@ from contextlib import suppress
 from datetime import datetime
 import logging
 from timeit import default_timer as timer
+from typing import Callable, Dict
 
 from homeassistant import core
 from homeassistant.const import (
     ATTR_NOW, EVENT_STATE_CHANGED, EVENT_TIME_CHANGED)
 from homeassistant.util import dt as dt_util
 
-BENCHMARKS = {}
+
+# mypy: allow-untyped-calls, allow-untyped-defs, no-check-untyped-defs
+# mypy: no-warn-return-any
+
+BENCHMARKS = {}  # type: Dict[str, Callable]
 
 
 def run(args):
-    """Handle ensure configuration commandline script."""
+    """Handle benchmark commandline script."""
     # Disable logging
     logging.getLogger('homeassistant.core').setLevel(logging.CRITICAL)
 
@@ -40,8 +45,6 @@ def run(args):
             loop.run_until_complete(hass.async_stop())
             loop.close()
 
-    return 0
-
 
 def benchmark(func):
     """Decorate to mark a benchmark."""
@@ -54,7 +57,7 @@ async def async_million_events(hass):
     """Run a million events."""
     count = 0
     event_name = 'benchmark_event'
-    event = asyncio.Event(loop=hass.loop)
+    event = asyncio.Event()
 
     @core.callback
     def listener(_):
@@ -81,7 +84,7 @@ async def async_million_events(hass):
 async def async_million_time_changed_helper(hass):
     """Run a million events through time changed helper."""
     count = 0
-    event = asyncio.Event(loop=hass.loop)
+    event = asyncio.Event()
 
     @core.callback
     def listener(_):
@@ -112,7 +115,7 @@ async def async_million_state_changed_helper(hass):
     """Run a million events through state changed helper."""
     count = 0
     entity_id = 'light.kitchen'
-    event = asyncio.Event(loop=hass.loop)
+    event = asyncio.Event()
 
     @core.callback
     def listener(*args):

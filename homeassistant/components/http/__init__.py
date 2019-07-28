@@ -29,8 +29,6 @@ from .real_ip import setup_real_ip
 from .static import CACHE_HEADERS, CachingStaticResource
 from .view import HomeAssistantView  # noqa
 
-REQUIREMENTS = ['aiohttp_cors==0.7.0']
-
 DOMAIN = 'http'
 
 CONF_API_PASSWORD = 'api_password'
@@ -64,7 +62,7 @@ def trusted_networks_deprecated(value):
         return value
 
     _LOGGER.warning(
-        "Configuring trusted_networks via the http component has been"
+        "Configuring trusted_networks via the http integration has been"
         " deprecated. Use the trusted networks auth provider instead."
         " For instructions, see https://www.home-assistant.io/docs/"
         "authentication/providers/#trusted-networks")
@@ -77,7 +75,7 @@ def api_password_deprecated(value):
         return value
 
     _LOGGER.warning(
-        "Configuring api_password via the http component has been"
+        "Configuring api_password via the http integration has been"
         " deprecated. Use the legacy api password auth provider instead."
         " For instructions, see https://www.home-assistant.io/docs/"
         "authentication/providers/#legacy-api-password")
@@ -230,6 +228,7 @@ class HomeAssistantHTTP:
         self.ssl_key = ssl_key
         self.server_host = server_host
         self.server_port = server_port
+        self.trusted_proxies = trusted_proxies
         self.is_ban_enabled = is_ban_enabled
         self.ssl_profile = ssl_profile
         self._handler = None
@@ -270,7 +269,7 @@ class HomeAssistantHTTP:
         for the redirect, otherwise it has to be a string with placeholders in
         rule syntax.
         """
-        def redirect(request):
+        async def redirect(request):
             """Redirect to location."""
             raise HTTPMovedPermanently(redirect_to)
 

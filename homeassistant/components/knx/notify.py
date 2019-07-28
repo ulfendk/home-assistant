@@ -11,8 +11,6 @@ from . import ATTR_DISCOVER_DEVICES, DATA_KNX
 
 DEFAULT_NAME = 'KNX Notify'
 
-DEPENDENCIES = ['knx']
-
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_ADDRESS): cv.string,
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string
@@ -45,8 +43,8 @@ def async_get_service_config(hass, config):
     import xknx
     notification = xknx.devices.Notification(
         hass.data[DATA_KNX].xknx,
-        name=config.get(CONF_NAME),
-        group_address=config.get(CONF_ADDRESS))
+        name=config[CONF_NAME],
+        group_address=config[CONF_ADDRESS])
     hass.data[DATA_KNX].xknx.devices.add(notification)
     return KNXNotificationService([notification, ])
 

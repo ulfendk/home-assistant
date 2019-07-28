@@ -1,16 +1,11 @@
-"""
-Support for Yamaha Receivers.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/media_player.yamaha/
-"""
+"""Support for Yamaha Receivers."""
 import logging
 
 import requests
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    MediaPlayerDevice, MEDIA_PLAYER_SCHEMA, PLATFORM_SCHEMA)
+    MediaPlayerDevice, PLATFORM_SCHEMA)
 from homeassistant.components.media_player.const import (
     DOMAIN, MEDIA_TYPE_MUSIC,
     SUPPORT_NEXT_TRACK, SUPPORT_PAUSE, SUPPORT_PLAY, SUPPORT_PLAY_MEDIA,
@@ -22,8 +17,6 @@ from homeassistant.const import (
     ATTR_ENTITY_ID, CONF_HOST, CONF_NAME, STATE_IDLE, STATE_OFF, STATE_ON,
     STATE_PLAYING)
 import homeassistant.helpers.config_validation as cv
-
-REQUIREMENTS = ['rxv==0.6.0']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +30,10 @@ CONF_ZONE_NAMES = 'zone_names'
 
 DATA_YAMAHA = 'yamaha_known_receivers'
 DEFAULT_NAME = "Yamaha Receiver"
+
+MEDIA_PLAYER_SCHEMA = vol.Schema({
+    ATTR_ENTITY_ID: cv.comp_entity_ids,
+})
 
 ENABLE_OUTPUT_SCHEMA = MEDIA_PLAYER_SCHEMA.extend({
     vol.Required(ATTR_ENABLED): cv.boolean,

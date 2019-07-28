@@ -6,6 +6,8 @@ from typing import Iterable
 
 from aiohttp.client_exceptions import (
     ClientConnectionError, ClientResponseError)
+from pysmartapp.event import EVENT_TYPE_DEVICE
+from pysmartthings import Attribute, Capability, SmartThings
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ACCESS_TOKEN
@@ -27,9 +29,6 @@ from .smartapp import (
     setup_smartapp, setup_smartapp_endpoint, smartapp_sync_subscriptions,
     unload_smartapp_endpoint, validate_installed_app,
     validate_webhook_requirements)
-
-REQUIREMENTS = ['pysmartapp==0.3.2', 'pysmartthings==0.6.7']
-DEPENDENCIES = ['webhook']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,10 +62,8 @@ async def async_migrate_entry(hass: HomeAssistantType, entry: ConfigEntry):
 
 async def async_setup_entry(hass: HomeAssistantType, entry: ConfigEntry):
     """Initialize config entry which represents an installed SmartApp."""
-    from pysmartthings import SmartThings
-
     if not validate_webhook_requirements(hass):
-        _LOGGER.warning("The 'base_url' of the 'http' component must be "
+        _LOGGER.warning("The 'base_url' of the 'http' integration must be "
                         "configured and start with 'https://'")
         return False
 
@@ -112,8 +109,8 @@ async def async_setup_entry(hass: HomeAssistantType, entry: ConfigEntry):
                               device.label, device.device_id, exc_info=True)
                 devices.remove(device)
 
-        await asyncio.gather(*[retrieve_device_status(d)
-                               for d in devices.copy()])
+        await asyncio.gather(*(retrieve_device_status(d)
+                               for d in devices.copy()))
 
         # Sync device subscriptions
         await smartapp_sync_subscriptions(
@@ -182,8 +179,6 @@ async def async_unload_entry(hass: HomeAssistantType, entry: ConfigEntry):
 async def async_remove_entry(
         hass: HomeAssistantType, entry: ConfigEntry) -> None:
     """Perform clean-up when entry is being removed."""
-    from pysmartthings import SmartThings
-
     api = SmartThings(async_get_clientsession(hass),
                       entry.data[CONF_ACCESS_TOKEN])
 
@@ -304,9 +299,6 @@ class DeviceBroker:
 
     async def _event_handler(self, req, resp, app):
         """Broker for incoming events."""
-        from pysmartapp.event import EVENT_TYPE_DEVICE
-        from pysmartthings import Capability, Attribute
-
         # Do not process events received from a different installed app
         # under the same parent SmartApp (valid use-scenario)
         if req.installed_app_id != self._installed_app_id:

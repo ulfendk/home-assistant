@@ -14,15 +14,14 @@ from homeassistant.core import Context, CoreState
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import condition, extract_domain_configs, script
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.config_validation import ENTITY_SERVICE_SCHEMA
 from homeassistant.helpers.entity import ToggleEntity
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.loader import bind_hass
-from homeassistant.setup import async_prepare_setup_platform
-from homeassistant.util.dt import utcnow
+from homeassistant.util.dt import parse_datetime, utcnow
 
 DOMAIN = 'automation'
-DEPENDENCIES = ['group']
 ENTITY_ID_FORMAT = DOMAIN + '.{}'
 
 GROUP_NAME_ALL_AUTOMATIONS = 'all automations'
@@ -52,7 +51,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _platform_validator(config):
-    """Validate it is a valid  platform."""
+    """Validate it is a valid platform."""
     try:
         platform = importlib.import_module('.{}'.format(config[CONF_PLATFORM]),
                                            __name__)
@@ -87,12 +86,7 @@ PLATFORM_SCHEMA = vol.Schema({
     vol.Required(CONF_ACTION): cv.SCRIPT_SCHEMA,
 })
 
-SERVICE_SCHEMA = vol.Schema({
-    vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids,
-})
-
-TRIGGER_SERVICE_SCHEMA = vol.Schema({
-    vol.Required(ATTR_ENTITY_ID): cv.comp_entity_ids,
+TRIGGER_SERVICE_SCHEMA = ENTITY_SERVICE_SCHEMA.extend({
     vol.Optional(ATTR_VARIABLES, default={}): dict,
 })
 
@@ -126,7 +120,7 @@ async def async_setup(hass, config):
                 context=service_call.context))
 
         if tasks:
-            await asyncio.wait(tasks, loop=hass.loop)
+            await asyncio.wait(tasks)
 
     async def turn_onoff_service_handler(service_call):
         """Handle automation turn on/off service calls."""
@@ -136,7 +130,7 @@ async def async_setup(hass, config):
             tasks.append(getattr(entity, method)())
 
         if tasks:
-            await asyncio.wait(tasks, loop=hass.loop)
+            await asyncio.wait(tasks)
 
     async def toggle_service_handler(service_call):
         """Handle automation toggle service calls."""
@@ -148,7 +142,7 @@ async def async_setup(hass, config):
                 tasks.append(entity.async_turn_on())
 
         if tasks:
-            await asyncio.wait(tasks, loop=hass.loop)
+            await asyncio.wait(tasks)
 
     async def reload_service_handler(service_call):
         """Remove all automations and load new ones from config."""
@@ -167,12 +161,12 @@ async def async_setup(hass, config):
 
     hass.services.async_register(
         DOMAIN, SERVICE_TOGGLE, toggle_service_handler,
-        schema=SERVICE_SCHEMA)
+        schema=ENTITY_SERVICE_SCHEMA)
 
     for service in (SERVICE_TURN_ON, SERVICE_TURN_OFF):
         hass.services.async_register(
             DOMAIN, service, turn_onoff_service_handler,
-            schema=SERVICE_SCHEMA)
+            schema=ENTITY_SERVICE_SCHEMA)
 
     return True
 
@@ -192,6 +186,7 @@ class AutomationEntity(ToggleEntity, RestoreEntity):
         self._last_triggered = None
         self._hidden = hidden
         self._initial_state = initial_state
+        self._is_enabled = False
 
     @property
     def name(self):
@@ -218,60 +213,44 @@ class AutomationEntity(ToggleEntity, RestoreEntity):
     @property
     def is_on(self) -> bool:
         """Return True if entity is on."""
-        return self._async_detach_triggers is not None
+        return (self._async_detach_triggers is not None or
+                self._is_enabled)
 
     async def async_added_to_hass(self) -> None:
         """Startup with initial state or previous state."""
         await super().async_added_to_hass()
+
+        state = await self.async_get_last_state()
+        if state:
+            enable_automation = state.state == STATE_ON
+            last_triggered = state.attributes.get('last_triggered')
+            if last_triggered is not None:
+                self._last_triggered = parse_datetime(last_triggered)
+            _LOGGER.debug("Loaded automation %s with state %s from state "
+                          " storage last state %s", self.entity_id,
+                          enable_automation, state)
+        else:
+            enable_automation = DEFAULT_INITIAL_STATE
+            _LOGGER.debug("Automation %s not in state storage, state %s from "
+                          "default is used.", self.entity_id,
+                          enable_automation)
+
         if self._initial_state is not None:
             enable_automation = self._initial_state
-            _LOGGER.debug("Automation %s initial state %s from config "
-                          "initial_state", self.entity_id, enable_automation)
-        else:
-            state = await self.async_get_last_state()
-            if state:
-                enable_automation = state.state == STATE_ON
-                self._last_triggered = state.attributes.get('last_triggered')
-                _LOGGER.debug("Automation %s initial state %s from recorder "
-                              "last state %s", self.entity_id,
-                              enable_automation, state)
-            else:
-                enable_automation = DEFAULT_INITIAL_STATE
-                _LOGGER.debug("Automation %s initial state %s from default "
-                              "initial state", self.entity_id,
-                              enable_automation)
+            _LOGGER.debug("Automation %s initial state %s overridden from "
+                          "config initial_state", self.entity_id,
+                          enable_automation)
 
-        if not enable_automation:
-            return
-
-        # HomeAssistant is starting up
-        if self.hass.state == CoreState.not_running:
-            async def async_enable_automation(event):
-                """Start automation on startup."""
-                await self.async_enable()
-
-            self.hass.bus.async_listen_once(
-                EVENT_HOMEASSISTANT_START, async_enable_automation)
-
-        # HomeAssistant is running
-        else:
+        if enable_automation:
             await self.async_enable()
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the entity on and update the state."""
-        if self.is_on:
-            return
-
         await self.async_enable()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the entity off."""
-        if not self.is_on:
-            return
-
-        self._async_detach_triggers()
-        self._async_detach_triggers = None
-        await self.async_update_ha_state()
+        await self.async_disable()
 
     async def async_trigger(self, variables, skip_condition=False,
                             context=None):
@@ -298,19 +277,51 @@ class AutomationEntity(ToggleEntity, RestoreEntity):
     async def async_will_remove_from_hass(self):
         """Remove listeners when removing automation from HASS."""
         await super().async_will_remove_from_hass()
-        await self.async_turn_off()
+        await self.async_disable()
 
     async def async_enable(self):
         """Enable this automation entity.
 
         This method is a coroutine.
         """
-        if self.is_on:
+        if self._is_enabled:
             return
 
-        self._async_detach_triggers = await self._async_attach_triggers(
-            self.async_trigger)
-        await self.async_update_ha_state()
+        self._is_enabled = True
+
+        # HomeAssistant is starting up
+        if self.hass.state != CoreState.not_running:
+            self._async_detach_triggers = await self._async_attach_triggers(
+                self.async_trigger)
+            self.async_write_ha_state()
+            return
+
+        async def async_enable_automation(event):
+            """Start automation on startup."""
+            # Don't do anything if no longer enabled or already attached
+            if (not self._is_enabled or
+                    self._async_detach_triggers is not None):
+                return
+
+            self._async_detach_triggers = await self._async_attach_triggers(
+                self.async_trigger)
+
+        self.hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_START, async_enable_automation)
+        self.async_write_ha_state()
+
+    async def async_disable(self):
+        """Disable the automation entity."""
+        if not self._is_enabled:
+            return
+
+        self._is_enabled = False
+
+        if self._async_detach_triggers is not None:
+            self._async_detach_triggers()
+            self._async_detach_triggers = None
+
+        self.async_write_ha_state()
 
     @property
     def device_state_attributes(self):
@@ -416,11 +427,8 @@ async def _async_process_trigger(hass, config, trigger_configs, name, action):
     }
 
     for conf in trigger_configs:
-        platform = await async_prepare_setup_platform(
-            hass, config, DOMAIN, conf.get(CONF_PLATFORM))
-
-        if platform is None:
-            return None
+        platform = importlib.import_module('.{}'.format(conf[CONF_PLATFORM]),
+                                           __name__)
 
         remove = await platform.async_trigger(hass, conf, action, info)
 

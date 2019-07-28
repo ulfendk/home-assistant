@@ -1,20 +1,14 @@
 """Support for devices connected to UniFi POE."""
-import asyncio
-from datetime import timedelta
 import logging
-
-import async_timeout
 
 from homeassistant.components import unifi
 from homeassistant.components.switch import SwitchDevice
 from homeassistant.const import CONF_HOST
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
-from .const import CONF_CONTROLLER, CONF_SITE_ID, CONTROLLER_ID, DOMAIN
-
-DEPENDENCIES = [DOMAIN]
-SCAN_INTERVAL = timedelta(seconds=15)
+from .const import CONF_CONTROLLER, CONF_SITE_ID, CONTROLLER_ID
 
 LOGGER = logging.getLogger(__name__)
 
@@ -35,87 +29,59 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         site=config_entry.data[CONF_CONTROLLER][CONF_SITE_ID],
     )
     controller = hass.data[unifi.DOMAIN][controller_id]
-    switches = {}
 
-    progress = None
-    update_progress = set()
-
-    async def request_update(object_id):
-        """Request an update."""
-        nonlocal progress
-        update_progress.add(object_id)
-
-        if progress is not None:
-            return await progress
-
-        progress = asyncio.ensure_future(update_controller())
-        result = await progress
-        progress = None
-        update_progress.clear()
-        return result
-
-    async def update_controller():
-        """Update the values of the controller."""
-        tasks = [async_update_items(
-            controller, async_add_entities, request_update,
-            switches, update_progress
-        )]
-        await asyncio.wait(tasks)
-
-    await update_controller()
-
-
-async def async_update_items(controller, async_add_entities,
-                             request_controller_update, switches,
-                             progress_waiting):
-    """Update POE port state from the controller."""
-    import aiounifi
-
-    @callback
-    def update_switch_state():
-        """Tell switches to reload state."""
-        for client_id, client in switches.items():
-            if client_id not in progress_waiting:
-                client.async_schedule_update_ha_state()
-
-    try:
-        with async_timeout.timeout(4):
-            await controller.api.clients.update()
-            await controller.api.devices.update()
-
-    except aiounifi.LoginRequired:
-        try:
-            with async_timeout.timeout(5):
-                await controller.api.login()
-        except (asyncio.TimeoutError, aiounifi.AiounifiException):
-            if controller.available:
-                controller.available = False
-                update_switch_state()
-            return
-
-    except (asyncio.TimeoutError, aiounifi.AiounifiException):
-        if controller.available:
-            LOGGER.error('Unable to reach controller %s', controller.host)
-            controller.available = False
-            update_switch_state()
+    if controller.site_role != 'admin':
         return
 
-    if not controller.available:
-        LOGGER.info('Reconnected to controller %s', controller.host)
-        controller.available = True
+    switches = {}
 
+    @callback
+    def update_controller():
+        """Update the values of the controller."""
+        update_items(controller, async_add_entities, switches)
+
+    async_dispatcher_connect(hass, controller.event_update, update_controller)
+
+    update_controller()
+
+
+@callback
+def update_items(controller, async_add_entities, switches):
+    """Update POE port state from the controller."""
     new_switches = []
     devices = controller.api.devices
-    for client_id in controller.api.clients:
 
-        if client_id in progress_waiting:
+    # block client
+    for client_id in controller.block_clients:
+
+        block_client_id = 'block-{}'.format(client_id)
+
+        if block_client_id in switches:
+            LOGGER.debug("Updating UniFi block switch %s (%s)",
+                         switches[block_client_id].entity_id,
+                         switches[block_client_id].client.mac)
+            switches[block_client_id].async_schedule_update_ha_state()
             continue
 
-        if client_id in switches:
-            LOGGER.debug("Updating UniFi switch %s (%s)",
-                         switches[client_id].entity_id,
-                         switches[client_id].client.mac)
-            switches[client_id].async_schedule_update_ha_state()
+        if client_id not in controller.api.clients_all:
+            continue
+
+        client = controller.api.clients_all[client_id]
+        switches[block_client_id] = UniFiBlockClientSwitch(client, controller)
+        new_switches.append(switches[block_client_id])
+        LOGGER.debug(
+            "New UniFi Block switch %s (%s)", client.hostname, client.mac)
+
+    # control poe
+    for client_id in controller.api.clients:
+
+        poe_client_id = 'poe-{}'.format(client_id)
+
+        if poe_client_id in switches:
+            LOGGER.debug("Updating UniFi POE switch %s (%s)",
+                         switches[poe_client_id].entity_id,
+                         switches[poe_client_id].client.mac)
+            switches[poe_client_id].async_schedule_update_ha_state()
             continue
 
         client = controller.api.clients[client_id]
@@ -138,35 +104,49 @@ async def async_update_items(controller, async_add_entities,
         if multi_clients_on_port:
             continue
 
-        switches[client_id] = UniFiSwitch(
-            client, controller, request_controller_update)
-        new_switches.append(switches[client_id])
-        LOGGER.debug("New UniFi switch %s (%s)", client.hostname, client.mac)
+        switches[poe_client_id] = UniFiPOEClientSwitch(client, controller)
+        new_switches.append(switches[poe_client_id])
+        LOGGER.debug(
+            "New UniFi POE switch %s (%s)", client.hostname, client.mac)
 
     if new_switches:
         async_add_entities(new_switches)
 
 
-class UniFiSwitch(SwitchDevice):
-    """Representation of a client that uses POE."""
+class UniFiClient:
+    """Base class for UniFi switches."""
 
-    def __init__(self, client, controller, request_controller_update):
+    def __init__(self, client, controller):
         """Set up switch."""
         self.client = client
         self.controller = controller
-        self.poe_mode = None
-        if self.port.poe_mode != 'off':
-            self.poe_mode = self.port.poe_mode
-        self.async_request_controller_update = request_controller_update
 
     async def async_update(self):
         """Synchronize state with controller."""
-        await self.async_request_controller_update(self.client.mac)
+        await self.controller.request_update()
 
     @property
     def name(self):
-        """Return the name of the switch."""
-        return self.client.hostname
+        """Return the name of the client."""
+        return self.client.name or self.client.hostname
+
+    @property
+    def device_info(self):
+        """Return a device description for device registry."""
+        return {
+            'connections': {(CONNECTION_NETWORK_MAC, self.client.mac)}
+        }
+
+
+class UniFiPOEClientSwitch(UniFiClient, SwitchDevice):
+    """Representation of a client that uses POE."""
+
+    def __init__(self, client, controller):
+        """Set up POE switch."""
+        super().__init__(client, controller)
+        self.poe_mode = None
+        if self.port.poe_mode != 'off':
+            self.poe_mode = self.port.poe_mode
 
     @property
     def unique_id(self):
@@ -207,13 +187,6 @@ class UniFiSwitch(SwitchDevice):
         return attributes
 
     @property
-    def device_info(self):
-        """Return a device description for device registry."""
-        return {
-            'connections': {(CONNECTION_NETWORK_MAC, self.client.mac)}
-        }
-
-    @property
     def device(self):
         """Shortcut to the switch that client is connected to."""
         return self.controller.api.devices[self.client.sw_mac]
@@ -222,3 +195,30 @@ class UniFiSwitch(SwitchDevice):
     def port(self):
         """Shortcut to the switch port that client is connected to."""
         return self.device.ports[self.client.sw_port]
+
+
+class UniFiBlockClientSwitch(UniFiClient, SwitchDevice):
+    """Representation of a blockable client."""
+
+    @property
+    def unique_id(self):
+        """Return a unique identifier for this switch."""
+        return 'block-{}'.format(self.client.mac)
+
+    @property
+    def is_on(self):
+        """Return true if client is blocked."""
+        return self.client.blocked
+
+    @property
+    def available(self):
+        """Return if controller is available."""
+        return self.controller.available
+
+    async def async_turn_on(self, **kwargs):
+        """Block client."""
+        await self.controller.api.clients.async_block(self.client.mac)
+
+    async def async_turn_off(self, **kwargs):
+        """Unblock client."""
+        await self.controller.api.clients.async_unblock(self.client.mac)

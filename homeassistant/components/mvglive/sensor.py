@@ -1,9 +1,4 @@
-"""
-Support for real-time departure information for public transport in Munich.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/sensor.mvglive/
-"""
+"""Support for departure information for public transport in Munich."""
 import logging
 from datetime import timedelta
 
@@ -15,8 +10,6 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
     CONF_NAME, ATTR_ATTRIBUTION)
-
-REQUIREMENTS = ['PyMVGLive==1.1.4']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +23,8 @@ CONF_PRODUCTS = 'products'
 CONF_TIMEOFFSET = 'timeoffset'
 CONF_NUMBER = 'number'
 
-DEFAULT_PRODUCT = ['U-Bahn', 'Tram', 'Bus', 'ExpressBus', 'S-Bahn']
+DEFAULT_PRODUCT = ['U-Bahn', 'Tram', 'Bus', 'ExpressBus', 'S-Bahn',
+                   'Nachteule']
 
 ICONS = {
     'U-Bahn': 'mdi:subway',
@@ -38,6 +32,7 @@ ICONS = {
     'Bus': 'mdi:bus',
     'ExpressBus': 'mdi:bus',
     'S-Bahn': 'mdi:train',
+    'Nachteule': 'mdi:owl',
     'SEV': 'mdi:checkbox-blank-circle-outline',
     '-': 'mdi:clock'
 }

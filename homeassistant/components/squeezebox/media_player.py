@@ -1,9 +1,4 @@
-"""
-Support for interfacing to the Logitech SqueezeBox API.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/media_player.squeezebox/
-"""
+"""Support for interfacing to the Logitech SqueezeBox API."""
 import asyncio
 import json
 import logging
@@ -14,7 +9,7 @@ import async_timeout
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    MediaPlayerDevice, MEDIA_PLAYER_SCHEMA, PLATFORM_SCHEMA)
+    MediaPlayerDevice, PLATFORM_SCHEMA)
 from homeassistant.components.media_player.const import (
     ATTR_MEDIA_ENQUEUE, DOMAIN, MEDIA_TYPE_MUSIC,
     SUPPORT_CLEAR_PLAYLIST, SUPPORT_NEXT_TRACK, SUPPORT_PAUSE,
@@ -22,8 +17,8 @@ from homeassistant.components.media_player.const import (
     SUPPORT_SHUFFLE_SET, SUPPORT_TURN_OFF, SUPPORT_TURN_ON,
     SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET)
 from homeassistant.const import (
-    ATTR_COMMAND, CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME,
-    STATE_IDLE, STATE_OFF, STATE_PAUSED, STATE_PLAYING)
+    ATTR_COMMAND, ATTR_ENTITY_ID, CONF_HOST, CONF_PASSWORD, CONF_PORT,
+    CONF_USERNAME, STATE_IDLE, STATE_OFF, STATE_PAUSED, STATE_PLAYING)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 import homeassistant.helpers.config_validation as cv
 from homeassistant.util.dt import utcnow
@@ -37,6 +32,10 @@ SUPPORT_SQUEEZEBOX = SUPPORT_PAUSE | SUPPORT_VOLUME_SET | \
     SUPPORT_VOLUME_MUTE | SUPPORT_PREVIOUS_TRACK | SUPPORT_NEXT_TRACK | \
     SUPPORT_SEEK | SUPPORT_TURN_ON | SUPPORT_TURN_OFF | SUPPORT_PLAY_MEDIA | \
     SUPPORT_PLAY | SUPPORT_SHUFFLE_SET | SUPPORT_CLEAR_PLAYLIST
+
+MEDIA_PLAYER_SCHEMA = vol.Schema({
+    ATTR_ENTITY_ID: cv.comp_entity_ids,
+})
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_HOST): cv.string,
@@ -133,7 +132,7 @@ async def async_setup_platform(hass, config, async_add_entities,
             update_tasks.append(player.async_update_ha_state(True))
 
         if update_tasks:
-            await asyncio.wait(update_tasks, loop=hass.loop)
+            await asyncio.wait(update_tasks)
 
     for service in SERVICE_TO_METHOD:
         schema = SERVICE_TO_METHOD[service]['schema']
@@ -184,7 +183,7 @@ class LogitechMediaServer:
 
         try:
             websession = async_get_clientsession(self.hass)
-            with async_timeout.timeout(TIMEOUT, loop=self.hass.loop):
+            with async_timeout.timeout(TIMEOUT):
                 response = await websession.post(
                     url,
                     data=data,

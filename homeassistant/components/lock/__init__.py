@@ -1,9 +1,4 @@
-"""
-Component to interface with various locks that can be controlled remotely.
-
-For more details about this component, please refer to the documentation
-at https://home-assistant.io/components/lock/
-"""
+"""Component to interface with locks that can be controlled remotely."""
 from datetime import timedelta
 import functools as ft
 import logging
@@ -14,17 +9,16 @@ from homeassistant.loader import bind_hass
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.config_validation import (  # noqa
-    PLATFORM_SCHEMA, PLATFORM_SCHEMA_BASE)
+    ENTITY_SERVICE_SCHEMA, PLATFORM_SCHEMA, PLATFORM_SCHEMA_BASE)
 import homeassistant.helpers.config_validation as cv
 from homeassistant.const import (
-    ATTR_CODE, ATTR_CODE_FORMAT, ATTR_ENTITY_ID, STATE_LOCKED, STATE_UNLOCKED,
-    SERVICE_LOCK, SERVICE_UNLOCK, SERVICE_OPEN)
+    ATTR_CODE, ATTR_CODE_FORMAT, STATE_LOCKED, STATE_UNLOCKED, SERVICE_LOCK,
+    SERVICE_UNLOCK, SERVICE_OPEN)
 from homeassistant.components import group
 
 ATTR_CHANGED_BY = 'changed_by'
 
 DOMAIN = 'lock'
-DEPENDENCIES = ['group']
 SCAN_INTERVAL = timedelta(seconds=30)
 
 ENTITY_ID_ALL_LOCKS = group.ENTITY_ID_FORMAT.format('all_locks')
@@ -34,8 +28,7 @@ GROUP_NAME_ALL_LOCKS = 'all locks'
 
 MIN_TIME_BETWEEN_SCANS = timedelta(seconds=10)
 
-LOCK_SERVICE_SCHEMA = vol.Schema({
-    vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids,
+LOCK_SERVICE_SCHEMA = ENTITY_SERVICE_SCHEMA.extend({
     vol.Optional(ATTR_CODE): cv.string,
 })
 

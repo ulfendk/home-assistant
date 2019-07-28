@@ -1,9 +1,4 @@
-"""
-Support for TP-Link routers.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/device_tracker.tplink/
-"""
+"""Support for TP-Link routers."""
 import base64
 from datetime import datetime
 import hashlib
@@ -21,8 +16,6 @@ from homeassistant.components.device_tracker import (
 from homeassistant.const import (
     CONF_HOST, CONF_PASSWORD, CONF_USERNAME, HTTP_HEADER_X_REQUESTED_WITH)
 import homeassistant.helpers.config_validation as cv
-
-REQUIREMENTS = ['tplink==0.2.1']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -48,6 +41,12 @@ def get_scanner(hass, config):
     should be gradually migrated in the pypi package
 
     """
+    _LOGGER.warning("TP-Link device tracker is unmaintained and will be "
+                    "removed in the future releases if no maintainer is "
+                    "found. If you have interest in this integration, "
+                    "feel free to create a pull request to move this code "
+                    "to a new 'tplink_router' integration and refactoring "
+                    "the device-specific parts to the tplink library")
     for cls in [
             TplinkDeviceScanner, Tplink5DeviceScanner, Tplink4DeviceScanner,
             Tplink3DeviceScanner, Tplink2DeviceScanner, Tplink1DeviceScanner
@@ -77,8 +76,8 @@ class TplinkDeviceScanner(DeviceScanner):
             self.last_results = {}
 
             self.success_init = self._update_info()
-        except requests.exceptions.ConnectionError:
-            _LOGGER.debug("ConnectionError in TplinkDeviceScanner")
+        except requests.exceptions.RequestException:
+            _LOGGER.debug("RequestException in %s", __class__.__name__)
 
     def scan_devices(self):
         """Scan for new devices and return a list with found device IDs."""
@@ -123,8 +122,8 @@ class Tplink1DeviceScanner(DeviceScanner):
         self.success_init = False
         try:
             self.success_init = self._update_info()
-        except requests.exceptions.ConnectionError:
-            _LOGGER.debug("ConnectionError in Tplink1DeviceScanner")
+        except requests.exceptions.RequestException:
+            _LOGGER.debug("RequestException in %s", __class__.__name__)
 
     def scan_devices(self):
         """Scan for new devices and return a list with found device IDs."""

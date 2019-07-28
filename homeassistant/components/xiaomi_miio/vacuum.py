@@ -9,14 +9,11 @@ from homeassistant.components.vacuum import (
     ATTR_CLEANED_AREA, DOMAIN, PLATFORM_SCHEMA, SUPPORT_BATTERY,
     SUPPORT_CLEAN_SPOT, SUPPORT_FAN_SPEED, SUPPORT_LOCATE, SUPPORT_PAUSE,
     SUPPORT_RETURN_HOME, SUPPORT_SEND_COMMAND, SUPPORT_STOP,
-    SUPPORT_STATE, SUPPORT_START, VACUUM_SERVICE_SCHEMA, StateVacuumDevice,
-    STATE_CLEANING, STATE_DOCKED, STATE_PAUSED, STATE_IDLE, STATE_RETURNING,
-    STATE_ERROR)
+    SUPPORT_STATE, SUPPORT_START, StateVacuumDevice, STATE_CLEANING,
+    STATE_DOCKED, STATE_PAUSED, STATE_IDLE, STATE_RETURNING, STATE_ERROR)
 from homeassistant.const import (
     ATTR_ENTITY_ID, CONF_HOST, CONF_NAME, CONF_TOKEN, STATE_OFF, STATE_ON)
 import homeassistant.helpers.config_validation as cv
-
-REQUIREMENTS = ['python-miio==0.4.5', 'construct==2.9.45']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +58,10 @@ ATTR_RC_VELOCITY = 'velocity'
 ATTR_STATUS = 'status'
 ATTR_ZONE_ARRAY = 'zone'
 ATTR_ZONE_REPEATER = 'repeats'
+
+VACUUM_SERVICE_SCHEMA = vol.Schema({
+    vol.Optional(ATTR_ENTITY_ID): cv.comp_entity_ids,
+})
 
 SERVICE_SCHEMA_REMOTE_CONTROL = VACUUM_SERVICE_SCHEMA.extend({
     vol.Optional(ATTR_RC_VELOCITY):
@@ -167,7 +168,7 @@ async def async_setup_platform(hass, config, async_add_entities,
             update_tasks.append(update_coro)
 
         if update_tasks:
-            await asyncio.wait(update_tasks, loop=hass.loop)
+            await asyncio.wait(update_tasks)
 
     for vacuum_service in SERVICE_TO_METHOD:
         schema = SERVICE_TO_METHOD[vacuum_service].get(
@@ -303,7 +304,7 @@ class MiroboVacuum(StateVacuumDevice):
     async def async_start(self):
         """Start or resume the cleaning task."""
         await self._try_command(
-            "Unable to start the vacuum: %s", self._vacuum.start)
+            "Unable to start the vacuum: %s", self._vacuum.resume_or_start)
 
     async def async_pause(self):
         """Pause the cleaning task."""

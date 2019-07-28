@@ -1,9 +1,4 @@
-"""
-Component for controlling Pandora stations through the pianobar client.
-
-For more details about this platform, please refer to the documentation
-https://home-assistant.io/components/media_player.pandora/
-"""
+"""Component for controlling Pandora stations through the pianobar client."""
 from datetime import timedelta
 import logging
 import os
@@ -21,7 +16,6 @@ from homeassistant.const import (
     SERVICE_MEDIA_PLAY_PAUSE, SERVICE_VOLUME_DOWN, SERVICE_VOLUME_UP,
     STATE_IDLE, STATE_OFF, STATE_PAUSED, STATE_PLAYING)
 
-REQUIREMENTS = ['pexpect==4.6.0']
 _LOGGER = logging.getLogger(__name__)
 
 # SUPPORT_VOLUME_SET is close to available but we need volume up/down
@@ -359,7 +353,7 @@ def _pianobar_exists():
         return True
 
     _LOGGER.warning(
-        "The Pandora component depends on the Pianobar client, which "
+        "The Pandora integration depends on the Pianobar client, which "
         "cannot be found. Please install using instructions at "
         "https://home-assistant.io/components/media_player.pandora/")
     return False

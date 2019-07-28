@@ -1,9 +1,4 @@
-"""
-Support for Google travel time sensors.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/sensor.google_travel_time/
-"""
+"""Support for Google travel time sensors."""
 import logging
 from datetime import datetime
 from datetime import timedelta
@@ -15,14 +10,14 @@ import homeassistant.util.dt as dt_util
 from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
     CONF_API_KEY, CONF_NAME, EVENT_HOMEASSISTANT_START, ATTR_LATITUDE,
-    ATTR_LONGITUDE, CONF_MODE)
+    ATTR_LONGITUDE, ATTR_ATTRIBUTION, CONF_MODE)
 from homeassistant.helpers import location
 from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
 
-REQUIREMENTS = ['googlemaps==2.5.1']
-
 _LOGGER = logging.getLogger(__name__)
+
+ATTRIBUTION = "Powered by Google"
 
 CONF_DESTINATION = 'destination'
 CONF_OPTIONS = 'options'
@@ -188,6 +183,9 @@ class GoogleTravelTimeSensor(Entity):
             res['duration'] = _data['duration']['text']
         if 'distance' in _data:
             res['distance'] = _data['distance']['text']
+        res['origin'] = self._origin
+        res['destination'] = self._destination
+        res[ATTR_ATTRIBUTION] = ATTRIBUTION
         return res
 
     @property

@@ -11,8 +11,6 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.script import Script
 
-REQUIREMENTS = ['xknx==0.10.0']
-
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "knx"
@@ -38,12 +36,12 @@ ATTR_DISCOVER_DEVICES = 'devices'
 
 TUNNELING_SCHEMA = vol.Schema({
     vol.Required(CONF_HOST): cv.string,
-    vol.Required(CONF_KNX_LOCAL_IP): cv.string,
+    vol.Optional(CONF_KNX_LOCAL_IP): cv.string,
     vol.Optional(CONF_PORT): cv.port,
 })
 
 ROUTING_SCHEMA = vol.Schema({
-    vol.Required(CONF_KNX_LOCAL_IP): cv.string,
+    vol.Optional(CONF_KNX_LOCAL_IP): cv.string,
 })
 
 EXPOSE_SCHEMA = vol.Schema({
@@ -335,4 +333,13 @@ class KNXExposeSensor:
         """Handle entity change."""
         if new_state is None:
             return
-        await self.device.set(float(new_state.state))
+        if new_state.state == "unknown":
+            return
+
+        if self.type == 'binary':
+            if new_state.state == "on":
+                await self.device.set(True)
+            elif new_state.state == "off":
+                await self.device.set(False)
+        else:
+            await self.device.set(new_state.state)

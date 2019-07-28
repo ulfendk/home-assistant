@@ -1,15 +1,10 @@
-"""
-Support for interfacing with Monoprice 6 zone home audio controller.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/media_player.monoprice/
-"""
+"""Support for interfacing with Monoprice 6 zone home audio controller."""
 import logging
 
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    MediaPlayerDevice, MEDIA_PLAYER_SCHEMA, PLATFORM_SCHEMA)
+    MediaPlayerDevice, PLATFORM_SCHEMA)
 from homeassistant.components.media_player.const import (
     DOMAIN, SUPPORT_SELECT_SOURCE,
     SUPPORT_TURN_OFF, SUPPORT_TURN_ON, SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET,
@@ -17,8 +12,6 @@ from homeassistant.components.media_player.const import (
 from homeassistant.const import (
     ATTR_ENTITY_ID, CONF_NAME, CONF_PORT, STATE_OFF, STATE_ON)
 import homeassistant.helpers.config_validation as cv
-
-REQUIREMENTS = ['pymonoprice==0.3']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +42,10 @@ ZONE_IDS = vol.All(vol.Coerce(int), vol.Any(
 
 # Valid source ids: 1-6
 SOURCE_IDS = vol.All(vol.Coerce(int), vol.Range(min=1, max=6))
+
+MEDIA_PLAYER_SCHEMA = vol.Schema({
+    ATTR_ENTITY_ID: cv.comp_entity_ids,
+})
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_PORT): cv.string,

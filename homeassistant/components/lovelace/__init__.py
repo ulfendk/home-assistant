@@ -26,6 +26,7 @@ CONFIG_SCHEMA = vol.Schema({
     }),
 }, extra=vol.ALLOW_EXTRA)
 
+EVENT_LOVELACE_UPDATED = 'lovelace_updated'
 
 LOVELACE_CONFIG_FILE = 'ui-lovelace.yaml'
 
@@ -52,7 +53,7 @@ async def async_setup(hass, config):
     # Pass in default to `get` because defaults not set if loaded as dep
     mode = config.get(DOMAIN, {}).get(CONF_MODE, MODE_STORAGE)
 
-    await hass.components.frontend.async_register_built_in_panel(
+    hass.components.frontend.async_register_built_in_panel(
         DOMAIN, config={
             'mode': mode
         })
@@ -83,6 +84,7 @@ class LovelaceStorage:
         """Initialize Lovelace config based on storage helper."""
         self._store = hass.helpers.storage.Store(STORAGE_VERSION, STORAGE_KEY)
         self._data = None
+        self._hass = hass
 
     async def async_get_info(self):
         """Return the YAML storage mode."""
@@ -113,6 +115,7 @@ class LovelaceStorage:
         if self._data is None:
             await self._load()
         self._data['config'] = config
+        self._hass.bus.async_fire(EVENT_LOVELACE_UPDATED)
         await self._store.async_save(self._data)
 
     async def _load(self):
@@ -144,7 +147,12 @@ class LovelaceYAML:
 
     async def async_load(self, force):
         """Load config."""
-        return await self.hass.async_add_executor_job(self._load_config, force)
+        is_updated, config = await self.hass.async_add_executor_job(
+            self._load_config, force
+        )
+        if is_updated:
+            self.hass.bus.async_fire(EVENT_LOVELACE_UPDATED)
+        return config
 
     def _load_config(self, force):
         """Load the actual config."""
@@ -154,7 +162,9 @@ class LovelaceYAML:
             config, last_update = self._cache
             modtime = os.path.getmtime(fname)
             if config and last_update > modtime:
-                return config
+                return False, config
+
+        is_updated = self._cache is not None
 
         try:
             config = load_yaml(fname)
@@ -162,7 +172,7 @@ class LovelaceYAML:
             raise ConfigNotFound from None
 
         self._cache = (config, time.time())
-        return config
+        return is_updated, config
 
     async def async_save(self, config):
         """Save config."""
@@ -176,18 +186,19 @@ def handle_yaml_errors(func):
         error = None
         try:
             result = await func(hass, connection, msg)
-            message = websocket_api.result_message(
-                msg['id'], result
-            )
         except ConfigNotFound:
             error = 'config_not_found', 'No config found.'
         except HomeAssistantError as err:
             error = 'error', str(err)
 
         if error is not None:
-            message = websocket_api.error_message(msg['id'], *error)
+            connection.send_error(msg['id'], *error)
+            return
 
-        connection.send_message(message)
+        if msg is not None:
+            await connection.send_big_result(msg['id'], result)
+        else:
+            connection.send_result(msg['id'], result)
 
     return send_with_error_handling
 

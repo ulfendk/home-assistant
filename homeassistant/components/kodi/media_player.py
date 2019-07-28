@@ -1,9 +1,4 @@
-"""
-Support for interfacing with the XBMC/Kodi JSON-RPC API.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/media_player.kodi/
-"""
+"""Support for interfacing with the XBMC/Kodi JSON-RPC API."""
 import asyncio
 from collections import OrderedDict
 from functools import wraps
@@ -16,7 +11,7 @@ import aiohttp
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    MediaPlayerDevice, MEDIA_PLAYER_SCHEMA, PLATFORM_SCHEMA)
+    MediaPlayerDevice, PLATFORM_SCHEMA)
 from homeassistant.components.media_player.const import (
     DOMAIN, MEDIA_TYPE_CHANNEL, MEDIA_TYPE_MOVIE,
     MEDIA_TYPE_MUSIC, MEDIA_TYPE_PLAYLIST, MEDIA_TYPE_TVSHOW, MEDIA_TYPE_VIDEO,
@@ -25,9 +20,9 @@ from homeassistant.components.media_player.const import (
     SUPPORT_SHUFFLE_SET, SUPPORT_STOP, SUPPORT_TURN_OFF, SUPPORT_TURN_ON,
     SUPPORT_VOLUME_MUTE, SUPPORT_VOLUME_SET, SUPPORT_VOLUME_STEP)
 from homeassistant.const import (
-    CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_PORT, CONF_PROXY_SSL,
-    CONF_TIMEOUT, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP, STATE_IDLE,
-    STATE_OFF, STATE_PAUSED, STATE_PLAYING)
+    ATTR_ENTITY_ID, CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_PORT,
+    CONF_PROXY_SSL, CONF_TIMEOUT, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP,
+    STATE_IDLE, STATE_OFF, STATE_PAUSED, STATE_PLAYING)
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import script
@@ -35,8 +30,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.template import Template
 from homeassistant.util.yaml import dump
 import homeassistant.util.dt as dt_util
-
-REQUIREMENTS = ['jsonrpc-async==0.6', 'jsonrpc-websocket==0.6']
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,6 +106,10 @@ ATTR_MEDIA_NAME = 'media_name'
 ATTR_MEDIA_ARTIST_NAME = 'artist_name'
 ATTR_MEDIA_ID = 'media_id'
 ATTR_METHOD = 'method'
+
+MEDIA_PLAYER_SCHEMA = vol.Schema({
+    ATTR_ENTITY_ID: cv.comp_entity_ids,
+})
 
 MEDIA_PLAYER_ADD_MEDIA_SCHEMA = MEDIA_PLAYER_SCHEMA.extend({
     vol.Required(ATTR_MEDIA_TYPE): cv.string,
@@ -238,7 +235,7 @@ async def async_setup_platform(hass, config, async_add_entities,
                 update_tasks.append(update_coro)
 
         if update_tasks:
-            await asyncio.wait(update_tasks, loop=hass.loop)
+            await asyncio.wait(update_tasks)
 
     if hass.services.has_service(DOMAIN, SERVICE_ADD_MEDIA):
         return

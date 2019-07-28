@@ -1,16 +1,11 @@
-"""
-Support for interfacing with Monoprice Blackbird 4k 8x8 HDBaseT Matrix.
-
-For more details about this platform, please refer to the documentation at
-https://home-assistant.io/components/media_player.blackbird
-"""
+"""Support for interfacing with Monoprice Blackbird 4k 8x8 HDBaseT Matrix."""
 import logging
 import socket
 
 import voluptuous as vol
 
 from homeassistant.components.media_player import (
-    MediaPlayerDevice, MEDIA_PLAYER_SCHEMA, PLATFORM_SCHEMA)
+    MediaPlayerDevice, PLATFORM_SCHEMA)
 from homeassistant.components.media_player.const import (
     DOMAIN, SUPPORT_SELECT_SOURCE,
     SUPPORT_TURN_OFF, SUPPORT_TURN_ON)
@@ -19,11 +14,13 @@ from homeassistant.const import (
     STATE_ON)
 import homeassistant.helpers.config_validation as cv
 
-REQUIREMENTS = ['pyblackbird==0.5']
-
 _LOGGER = logging.getLogger(__name__)
 
 SUPPORT_BLACKBIRD = SUPPORT_TURN_ON | SUPPORT_TURN_OFF | SUPPORT_SELECT_SOURCE
+
+MEDIA_PLAYER_SCHEMA = vol.Schema({
+    ATTR_ENTITY_ID: cv.comp_entity_ids,
+})
 
 ZONE_SCHEMA = vol.Schema({
     vol.Required(CONF_NAME): cv.string,

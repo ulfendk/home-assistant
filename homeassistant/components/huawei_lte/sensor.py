@@ -1,6 +1,7 @@
 """Support for Huawei LTE sensors."""
 import logging
 import re
+from typing import Optional
 
 import attr
 import voluptuous as vol
@@ -8,17 +9,17 @@ import voluptuous as vol
 from homeassistant.const import (
     CONF_URL, CONF_MONITORED_CONDITIONS, STATE_UNKNOWN,
 )
-from homeassistant.components.sensor import PLATFORM_SCHEMA
+from homeassistant.components.sensor import (
+    PLATFORM_SCHEMA, DEVICE_CLASS_SIGNAL_STRENGTH)
 from homeassistant.helpers.entity import Entity
 import homeassistant.helpers.config_validation as cv
 
-from ..huawei_lte import DATA_KEY, RouterData
+from . import DATA_KEY, RouterData
 
 _LOGGER = logging.getLogger(__name__)
 
-DEPENDENCIES = ['huawei_lte']
-
 DEFAULT_NAME_TEMPLATE = 'Huawei {} {}'
+DEFAULT_DEVICE_NAME = 'LTE'
 
 DEFAULT_SENSORS = [
     "device_information.WanIPAddress",
@@ -62,39 +63,43 @@ SENSOR_META = {
     ),
     "device_signal.rsrq": dict(
         name="RSRQ",
+        device_class=DEVICE_CLASS_SIGNAL_STRENGTH,
         # http://www.lte-anbieter.info/technik/rsrq.php
         icon=lambda x:
-        x >= -5 and "mdi:signal-cellular-3"
-        or x >= -8 and "mdi:signal-cellular-2"
-        or x >= -11 and "mdi:signal-cellular-1"
-        or "mdi:signal-cellular-outline"
+        (x is None or x < -11) and "mdi:signal-cellular-outline"
+        or x < -8 and "mdi:signal-cellular-1"
+        or x < -5 and "mdi:signal-cellular-2"
+        or "mdi:signal-cellular-3"
     ),
     "device_signal.rsrp": dict(
         name="RSRP",
+        device_class=DEVICE_CLASS_SIGNAL_STRENGTH,
         # http://www.lte-anbieter.info/technik/rsrp.php
         icon=lambda x:
-        x >= -80 and "mdi:signal-cellular-3"
-        or x >= -95 and "mdi:signal-cellular-2"
-        or x >= -110 and "mdi:signal-cellular-1"
-        or "mdi:signal-cellular-outline"
+        (x is None or x < -110) and "mdi:signal-cellular-outline"
+        or x < -95 and "mdi:signal-cellular-1"
+        or x < -80 and "mdi:signal-cellular-2"
+        or "mdi:signal-cellular-3"
     ),
     "device_signal.rssi": dict(
         name="RSSI",
+        device_class=DEVICE_CLASS_SIGNAL_STRENGTH,
         # https://eyesaas.com/wi-fi-signal-strength/
         icon=lambda x:
-        x >= -60 and "mdi:signal-cellular-3"
-        or x >= -70 and "mdi:signal-cellular-2"
-        or x >= -80 and "mdi:signal-cellular-1"
-        or "mdi:signal-cellular-outline"
+        (x is None or x < -80) and "mdi:signal-cellular-outline"
+        or x < -70 and "mdi:signal-cellular-1"
+        or x < -60 and "mdi:signal-cellular-2"
+        or "mdi:signal-cellular-3"
     ),
     "device_signal.sinr": dict(
         name="SINR",
+        device_class=DEVICE_CLASS_SIGNAL_STRENGTH,
         # http://www.lte-anbieter.info/technik/sinr.php
         icon=lambda x:
-        x >= 10 and "mdi:signal-cellular-3"
-        or x >= 5 and "mdi:signal-cellular-2"
-        or x >= 0 and "mdi:signal-cellular-1"
-        or "mdi:signal-cellular-outline"
+        (x is None or x < 0) and "mdi:signal-cellular-outline"
+        or x < 5 and "mdi:signal-cellular-1"
+        or x < 10 and "mdi:signal-cellular-2"
+        or "mdi:signal-cellular-3"
     ),
 }
 
@@ -111,6 +116,8 @@ def setup_platform(
     data = hass.data[DATA_KEY].get_data(config)
     sensors = []
     for path in config.get(CONF_MONITORED_CONDITIONS):
+        if path == "traffic_statistics":  # backwards compatibility
+            path = "monitoring_traffic_statistics"
         data.subscribe(path)
         sensors.append(HuaweiLteSensor(data, path, SENSOR_META.get(path, {})))
 
@@ -155,14 +162,23 @@ class HuaweiLteSensor(Entity):
     @property
     def name(self) -> str:
         """Return sensor name."""
-        dname = self.data["device_information.DeviceName"]
+        try:
+            dname = self.data["device_information.DeviceName"]
+        except KeyError:
+            dname = None
         vname = self.meta.get("name", self.path)
-        return DEFAULT_NAME_TEMPLATE.format(dname, vname)
+        return DEFAULT_NAME_TEMPLATE.format(
+            dname or DEFAULT_DEVICE_NAME, vname)
 
     @property
     def state(self):
         """Return sensor state."""
         return self._state
+
+    @property
+    def device_class(self) -> Optional[str]:
+        """Return sensor device class."""
+        return self.meta.get("device_class")
 
     @property
     def unit_of_measurement(self):

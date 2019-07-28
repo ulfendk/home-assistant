@@ -12,14 +12,13 @@ from homeassistant.loader import bind_hass
 from homeassistant.helpers.entity import ToggleEntity
 from homeassistant.helpers.entity_component import EntityComponent
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.config_validation import ENTITY_SERVICE_SCHEMA
 
 from homeassistant.helpers.script import Script
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = 'script'
-DEPENDENCIES = ['group']
-
 ATTR_CAN_CANCEL = 'can_cancel'
 ATTR_LAST_ACTION = 'last_action'
 ATTR_LAST_TRIGGERED = 'last_triggered'
@@ -41,8 +40,7 @@ CONFIG_SCHEMA = vol.Schema({
 }, extra=vol.ALLOW_EXTRA)
 
 SCRIPT_SERVICE_SCHEMA = vol.Schema(dict)
-SCRIPT_TURN_ONOFF_SCHEMA = vol.Schema({
-    vol.Optional(ATTR_ENTITY_ID): cv.entity_ids,
+SCRIPT_TURN_ONOFF_SCHEMA = ENTITY_SERVICE_SCHEMA.extend({
     vol.Optional(ATTR_VARIABLES): dict,
 })
 RELOAD_SERVICE_SCHEMA = vol.Schema({})
@@ -81,10 +79,15 @@ async def async_setup(hass, config):
     async def turn_off_service(service):
         """Cancel a script."""
         # Stopping a script is ok to be done in parallel
+        scripts = await component.async_extract_from_service(service)
+
+        if not scripts:
+            return
+
         await asyncio.wait([
             script.async_turn_off() for script
-            in await component.async_extract_from_service(service)
-        ], loop=hass.loop)
+            in scripts
+        ])
 
     async def toggle_service(service):
         """Toggle a script."""
@@ -170,8 +173,14 @@ class ScriptEntity(ToggleEntity):
             ATTR_NAME: self.script.name,
             ATTR_ENTITY_ID: self.entity_id,
         }, context=context)
-        await self.script.async_run(
-            kwargs.get(ATTR_VARIABLES), context)
+        try:
+            await self.script.async_run(
+                kwargs.get(ATTR_VARIABLES), context)
+        except Exception as err:  # pylint: disable=broad-except
+            self.script.async_log_exception(
+                _LOGGER, "Error executing script {}".format(self.entity_id),
+                err)
+            raise err
 
     async def async_turn_off(self, **kwargs):
         """Turn script off."""
